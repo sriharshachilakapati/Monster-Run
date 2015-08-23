@@ -1,5 +1,7 @@
 package com.shc.ld33.game.entities;
 
+import com.shc.ld33.game.states.IntroState;
+import com.shc.silenceengine.core.Game;
 import com.shc.silenceengine.input.Keyboard;
 import com.shc.silenceengine.math.Vector2;
 import com.shc.silenceengine.math.geom2d.Rectangle;
@@ -13,24 +15,24 @@ import resources.Resources;
  */
 public class Monster extends Entity2D
 {
-    private boolean canAttack  = true;
-    
-    private GameTimer attackTimer;
-    
+    private boolean inJump     = false;
+    private boolean isOnGround = false;
+
+    private GameTimer jumpTimer;
+
     public Monster(Vector2 position)
     {
         super(Resources.Sprites.MONSTER, new Rectangle(Resources.Textures.MONSTER.getWidth(),
                                                        Resources.Textures.MONSTER.getHeight()));
-        
         setCenter(position);
-        
-        attackTimer = new GameTimer(3, TimeUtils.Unit.SECONDS);
-        attackTimer.setCallback(() ->
+
+        jumpTimer = new GameTimer(1, TimeUtils.Unit.SECONDS);
+        jumpTimer.setCallback(() ->
         {
             if (isDestroyed())
                 return;
             
-            canAttack = true;
+            inJump = false;
         });
     }
     
@@ -40,28 +42,31 @@ public class Monster extends Entity2D
         getVelocity().y = (float) Math.sin(TimeUtils.currentSeconds() * 2) / 2;
         getVelocity().x = (float) Math.sin(Math.toRadians(90) + TimeUtils.currentSeconds() * 2) / 2;
         
-        if (Keyboard.isPressed('W') || Keyboard.isPressed(Keyboard.KEY_UP))
-            getVelocity().y -= 4;
-        
-        if (Keyboard.isPressed('S') || Keyboard.isPressed(Keyboard.KEY_DOWN))
-            getVelocity().y += 4;
-        
-        if (Keyboard.isPressed('A') || Keyboard.isPressed(Keyboard.KEY_LEFT))
-            getVelocity().x -= 4;
-        
-        if (Keyboard.isPressed('D') || Keyboard.isPressed(Keyboard.KEY_RIGHT))
-            getVelocity().x += 4;
-        
-        if (canAttack && ((int) (getRotation()) == 0) && Keyboard.isClicked(Keyboard.KEY_SPACE))
+        if (isOnGround && Keyboard.isClicked(Keyboard.KEY_SPACE))
         {
-            canAttack = false;
-            attackTimer.start();
+            inJump = true;
+            jumpTimer.start();
+
+            Resources.Sounds.JUMP.play();
         }
         
-        if (!canAttack)
+        if (inJump)
+            getVelocity().y -= 8;
+        
+        getVelocity().y += 4;
+        
+        if (inJump)
             rotateTo(90, 135 * delta);
         else
             rotateTo(0, 135 * delta);
+        
+        if (getPosition().y > 600)
+        {
+            Game.setGameState(new IntroState());
+            Resources.Sounds.GAME_OVER.play();
+        }
+        
+        isOnGround = false;
     }
     
     private void rotateTo(float angle, float stepAngle)
@@ -78,5 +83,32 @@ public class Monster extends Entity2D
             rotate(stepAngle);
         else
             rotate(-stepAngle);
+    }
+    
+    @Override
+    public void collision(Entity2D other)
+    {
+        if (other instanceof Grass)
+        {
+            isOnGround = true;
+            inJump = false;
+            
+            getPosition().y = other.getPosition().y - getHeight();
+        }
+        else if (other instanceof Thorns)
+        {
+            Game.setGameState(new IntroState());
+            Resources.Sounds.GAME_OVER.play();
+        }
+        else if (other instanceof Floor)
+        {
+            float distance = getCenter().y * getCenter().y + other.getCenter().y * other.getCenter().y;
+
+            if (distance > 50 * 50)
+            {
+                Game.setGameState(new IntroState());
+                Resources.Sounds.GAME_OVER.play();
+            }
+        }
     }
 }
